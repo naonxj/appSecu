@@ -3,13 +3,16 @@ import {
   View, Text, TextInput, TouchableOpacity, FlatList, StyleSheet, Modal, ScrollView, Alert, RefreshControl
 } from 'react-native';
 
-const API_URL = 'http://10.0.2.2:3000/api';
+// ★ DB 함수 import (파일 위치가 screens 폴더 안이라면 ../database 가 맞습니다)
+import { 
+  getDoctorAppointments, updateTreatment, searchPatients, getPatientDetail 
+} from '../database';
 
-// 날짜 포맷 헬퍼
+// 날짜 포맷 헬퍼 (YYYY-MM-DD)
 const formatDate = (date: Date) => {
   const y = date.getFullYear();
-  const m = (`0${date.getMonth() + 1}`).slice(-2);
-  const d = (`0${date.getDate()}`).slice(-2);
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
   return `${y}-${m}-${d}`;
 };
 
@@ -18,7 +21,7 @@ export default function DoctorScreen({ route, navigation }: any) {
   const params = route?.params || {};
   const { userId, username, name } = params;
   
-  // 관리자 모드인지 확인
+  // 관리자 모드인지 확인 (이름에 '(관리자)'가 포함되어 있으면 관리자)
   const isAdmin = name && name.includes('(관리자)');
 
   // 탭 및 로딩 상태
@@ -52,33 +55,48 @@ export default function DoctorScreen({ route, navigation }: any) {
   const [selectedPatientInfo, setSelectedPatientInfo] = useState<any>(null);
   const [selectedPatientHistory, setSelectedPatientHistory] = useState<any[]>([]);
 
-  // --- 데이터 불러오기 ---
-  const fetchDailyData = async () => {
+  // --- 데이터 불러오기 함수들 ---
+  
+  // 1. 일별 예약 현황 불러오기
+  const fetchDailyData = useCallback(async () => {
     if (!userId) return; 
     try {
-      const res = await fetch(`${API_URL}/doctor/appointments?doctorId=${userId}&date=${selectedDate}`);
-      const data = await res.json();
-      // 데이터가 없거나 에러일 경우를 대비해 기본값 설정
-      setStats(data.stats || { total: 0, completed: 0, waiting: 0 });
-      setAppointments(Array.isArray(data.appointments) ? data.appointments : []);
+      const data = await getDoctorAppointments(userId, selectedDate);
+      // DB에서 가져온 데이터가 올바른지 확인 후 상태 업데이트
+      if (data) {
+        setStats(data.stats || { total: 0, completed: 0, waiting: 0 });
+        setAppointments(data.appointments || []);
+      }
     } catch (e) { 
-      console.error(e);
+      console.error("데이터 로드 실패:", e);
       setAppointments([]); 
     }
-  };
+  }, [userId, selectedDate]);
 
-  // useEffect에서 userId가 변경될 때도 재호출
+  // 2. 환자 검색
+  const handleSearchPatients = useCallback(async () => {
+    try {
+      const data = await searchPatients(keyword);
+      setSearchResult(data || []);
+    } catch(e) { console.error("검색 실패:", e); }
+  }, [keyword]);
+
+  // 화면 진입 또는 날짜/탭 변경 시 데이터 갱신
   useEffect(() => {
-    if (activeTab === 'management') fetchDailyData();
-    else if (activeTab === 'info') searchPatients();
-  }, [selectedDate, activeTab, userId]);
+    if (activeTab === 'management') {
+      fetchDailyData();
+    } else if (activeTab === 'info') {
+      handleSearchPatients();
+    }
+  }, [selectedDate, activeTab, fetchDailyData, handleSearchPatients]);
 
-  const onRefresh = useCallback(async () => {
+  // 당겨서 새로고침
+  const onRefresh = async () => {
     setRefreshing(true);
     if (activeTab === 'management') await fetchDailyData();
-    else if (activeTab === 'info') searchPatients();
+    else if (activeTab === 'info') await handleSearchPatients();
     setRefreshing(false);
-  }, [activeTab, selectedDate, keyword]);
+  };
 
   // --- 달력 로직 ---
   const openCalendar = () => {
@@ -107,11 +125,14 @@ export default function DoctorScreen({ route, navigation }: any) {
     const firstDay = new Date(calYear, calMonth, 1).getDay();
     const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
     const days = [];
+    
+    // 빈 칸 채우기
     for (let i = 0; i < firstDay; i++) {
       days.push(<View key={`empty-${i}`} style={styles.calDayCell} />);
     }
+    // 날짜 채우기
     for (let d = 1; d <= daysInMonth; d++) {
-      const dateStr = `${calYear}-${(`0${calMonth+1}`).slice(-2)}-${(`0${d}`).slice(-2)}`;
+      const dateStr = `${calYear}-${String(calMonth + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
       const isSelected = tempSelectedDate === dateStr;
       days.push(
         <TouchableOpacity key={d} style={[styles.calDayCell, isSelected && styles.calDaySelected]} onPress={() => setTempSelectedDate(dateStr)}>
@@ -136,9 +157,8 @@ export default function DoctorScreen({ route, navigation }: any) {
     );
   };
 
-  // --- 진료 함수 ---
+  // --- 진료 처리 함수 ---
   const openTreatmentModal = (item: any) => {
-    // 모달을 열 때 값을 안전하게 초기화
     setCurrentAppt(item);
     setDiagnosis(item.diagnosis || ''); 
     setPrescription(item.prescription || '');
@@ -150,43 +170,33 @@ export default function DoctorScreen({ route, navigation }: any) {
   const saveTreatment = async (status: string) => {
     if (!currentAppt) return;
     try {
-      const res = await fetch(`${API_URL}/appointments/${currentAppt.id}`, {
-        method: 'PUT',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({
-          status, memo, diagnosis, prescription, doctor_opinion: opinion
-        })
-      });
-
-      if (res.ok) {
-        setTreatModalVisible(false);
-        fetchDailyData(); 
-        Alert.alert("성공", status==='completed' ? "진료 완료 처리되었습니다." : "임시 저장되었습니다.");
-      } else {
-        Alert.alert("오류", "저장에 실패했습니다.");
-      }
+      // DB 업데이트
+      await updateTreatment(currentAppt.id, status, memo, diagnosis, prescription, opinion);
+      
+      setTreatModalVisible(false);
+      fetchDailyData(); // 목록 갱신
+      
+      Alert.alert("성공", status === 'completed' ? "진료 완료 처리되었습니다." : "임시 저장되었습니다.");
     } catch (e) { 
-      Alert.alert("오류", "서버 통신 오류가 발생했습니다."); 
+      console.error(e);
+      Alert.alert("오류", "저장에 실패했습니다."); 
     }
-  };
-
-  const searchPatients = async () => {
-    try {
-      const query = keyword ? keyword : '';
-      const res = await fetch(`${API_URL}/doctor/patients/search?keyword=${query}`);
-      const data = await res.json();
-      setSearchResult(Array.isArray(data) ? data : []);
-    } catch(e) { console.error(e); }
   };
 
   const showPatientDetail = async (patientId: number) => {
     try {
-      const res = await fetch(`${API_URL}/doctor/patient/${patientId}`);
-      const data = await res.json();
-      setSelectedPatientInfo(data.info);      
-      setSelectedPatientHistory(Array.isArray(data.history) ? data.history : []);
-      setPatientHistoryModal(true);
-    } catch(e) { Alert.alert("오류","정보 조회 실패"); }
+      const data = await getPatientDetail(patientId);
+      if (data) {
+        setSelectedPatientInfo(data.info);      
+        setSelectedPatientHistory(data.history || []);
+        setPatientHistoryModal(true);
+      } else {
+        Alert.alert("알림", "환자 정보를 찾을 수 없습니다.");
+      }
+    } catch(e) { 
+      console.error(e);
+      Alert.alert("오류", "정보 조회 실패"); 
+    }
   };
 
   return (
@@ -196,7 +206,7 @@ export default function DoctorScreen({ route, navigation }: any) {
         <Text style={styles.headerTitle}>👨‍⚕️ Doctor 진료실</Text>
         <View style={{alignItems:'flex-end'}}>
           <Text style={{fontSize:14, fontWeight:'600'}}>{name} 선생님</Text>
-          {/* 관리자가 아닐 때만 로그아웃 버튼 표시 (관리자는 상단 뒤로가기 사용) */}
+          {/* 관리자가 아닐 때만 로그아웃 버튼 표시 */}
           {!isAdmin && (
             <TouchableOpacity onPress={() => navigation.replace('Auth')}>
               <Text style={{color:'#e74c3c', fontSize:12, marginTop:2}}>로그아웃</Text>
@@ -205,7 +215,7 @@ export default function DoctorScreen({ route, navigation }: any) {
         </View>
       </View>
 
-      {/* 탭 */}
+      {/* 탭 버튼 */}
       <View style={styles.tabContainer}>
         <TouchableOpacity style={[styles.tabBtn, activeTab==='management'&&styles.activeTab]} onPress={()=>setActiveTab('management')}>
           <Text style={{fontWeight: activeTab==='management'?'bold':'normal', color: activeTab==='management'?'#2980b9':'#7f8c8d'}}>진료관리</Text>
@@ -216,6 +226,7 @@ export default function DoctorScreen({ route, navigation }: any) {
       </View>
 
       <View style={styles.content}>
+        {/* [탭 1] 진료 관리 */}
         {activeTab === 'management' ? (
           <>
             <View style={styles.statsRow}>
@@ -238,8 +249,11 @@ export default function DoctorScreen({ route, navigation }: any) {
                 <TouchableOpacity style={[styles.card, item.status==='completed' && styles.cardCompleted]} onPress={() => openTreatmentModal(item)}>
                   <View style={styles.cardHeader}>
                     <Text style={styles.timeBadge}>{item.time ? item.time.toString().slice(0, 5) : ''}</Text>
-                    <Text style={[styles.statusBadge, item.status==='waiting'?{color:'#e67e22'}:item.status==='completed'?{color:'#2980b9'}:{color:'#27ae60'}]}>
-                      {item.status==='waiting'?'대기': item.status==='progress'?'진료중':'완료'}
+                    <Text style={[styles.statusBadge, 
+                        item.status==='waiting' ? {color:'#e67e22'} : 
+                        item.status==='completed' ? {color:'#2980b9'} : {color:'#27ae60'}
+                    ]}>
+                      {item.status==='waiting' ? '대기' : item.status==='completed' ? '완료' : '진료중'}
                     </Text>
                   </View>
                   <Text style={styles.patientName}>{item.patient_name} 님</Text>
@@ -250,11 +264,11 @@ export default function DoctorScreen({ route, navigation }: any) {
             />
           </>
         ) : (
-          /* 환자 검색 탭 */
+          /* [탭 2] 환자 검색 */
           <View style={{flex:1}}>
             <View style={styles.searchBar}>
               <TextInput style={styles.searchInput} value={keyword} onChangeText={setKeyword} placeholder="이름/ID 검색"/>
-              <TouchableOpacity style={styles.searchBtn} onPress={searchPatients}><Text style={{color:'white'}}>검색</Text></TouchableOpacity>
+              <TouchableOpacity style={styles.searchBtn} onPress={handleSearchPatients}><Text style={{color:'white'}}>검색</Text></TouchableOpacity>
             </View>
             <FlatList
               data={searchResult}
@@ -265,6 +279,7 @@ export default function DoctorScreen({ route, navigation }: any) {
                    <Text style={{color:'#3498db'}}>상세 &gt;</Text>
                 </TouchableOpacity>
               )}
+              ListEmptyComponent={<Text style={{textAlign:'center', marginTop:20, color:'#999'}}>검색 결과가 없습니다.</Text>}
             />
           </View>
         )}
@@ -283,7 +298,7 @@ export default function DoctorScreen({ route, navigation }: any) {
         </View>
       </Modal>
 
-      {/* ★ [수정됨] 진료 차트 모달 - KeyboardAvoidingView 제거 */}
+      {/* 진료 차트 모달 */}
       <Modal visible={treatModalVisible} animationType="slide">
         <View style={styles.chartContainer}>
           <View style={styles.chartHeader}>
@@ -306,7 +321,7 @@ export default function DoctorScreen({ route, navigation }: any) {
                 style={styles.chartInput} 
                 value={diagnosis} 
                 onChangeText={setDiagnosis} 
-                placeholder="입력하세요"
+                placeholder="진단명을 입력하세요"
               />
 
               <Text style={styles.inputLabel}>2. 처방</Text>
@@ -315,7 +330,7 @@ export default function DoctorScreen({ route, navigation }: any) {
                 multiline 
                 value={prescription} 
                 onChangeText={setPrescription} 
-                placeholder="입력하세요"
+                placeholder="처방 내역을 입력하세요"
               />
 
               <Text style={styles.inputLabel}>3. 소견</Text>
@@ -323,15 +338,15 @@ export default function DoctorScreen({ route, navigation }: any) {
                 style={styles.chartInput} 
                 value={opinion} 
                 onChangeText={setOpinion} 
-                placeholder="특이사항"
+                placeholder="특이사항 / 소견"
               />
 
-              <Text style={styles.inputLabel}>4. 메모</Text>
+              <Text style={styles.inputLabel}>4. 메모 (병원 내부용)</Text>
               <TextInput 
                 style={styles.chartInput} 
                 value={memo} 
                 onChangeText={setMemo} 
-                placeholder="내부 기록용"
+                placeholder="내부 기록용 메모"
               />
 
               <View style={styles.chartBtnRow}>
@@ -356,7 +371,6 @@ export default function DoctorScreen({ route, navigation }: any) {
                <Text style={styles.infoText}>이름: {selectedPatientInfo.name}</Text>
                <Text style={styles.infoText}>아이디: {selectedPatientInfo.username}</Text>
                <Text style={styles.infoText}>생년월일: {selectedPatientInfo.birth ? selectedPatientInfo.birth.split('T')[0] : '-'}</Text>
-               <Text style={styles.infoText}>성별: {selectedPatientInfo.gender || '-'}</Text>
              </View>
            )}
            <View style={styles.divider}/>
@@ -367,7 +381,7 @@ export default function DoctorScreen({ route, navigation }: any) {
              style={{marginTop:10}}
              renderItem={({item}) => (
                <View style={styles.historyCard}>
-                 <Text style={{fontWeight:'bold'}}>{item.date ? item.date.split('T')[0] : ''} - {item.doctor_name}</Text>
+                 <Text style={{fontWeight:'bold'}}>{item.date ? item.date.split('T')[0] : ''} - {item.doctor_name || '담당의 없음'}</Text>
                  <Text>진단: {item.diagnosis || '-'}</Text>
                  <Text>처방: {item.prescription || '-'}</Text>
                </View>

@@ -227,7 +227,7 @@ export default function PatientScreen({ route, navigation }: any) {
         {['reservation', 'history', 'board'].map(tab => (
           <TouchableOpacity key={tab} style={[styles.tabBtn, activeTab===tab && styles.activeTab]} onPress={()=>setActiveTab(tab)}>
             <Text style={[styles.tabText, activeTab===tab && styles.activeTabText]}>
-               {tab==='reservation'?'예약':tab==='history'?'기록':'게시판'}
+               {tab==='reservation'?'내 예약':tab==='history'?'진료기록':'게시판'}
             </Text>
           </TouchableOpacity>
         ))}
@@ -240,7 +240,7 @@ export default function PatientScreen({ route, navigation }: any) {
              <TouchableOpacity style={styles.addBtn} onPress={() => {
                 setNewTime(''); setSymptoms(''); setSelectedDoctorId(null); setResModalVisible(true);
              }}>
-               <Text style={styles.addBtnText}>+ 새 진료 예약</Text>
+               <Text style={styles.addBtnText}>✏️ 새 진료 예약하기</Text>
              </TouchableOpacity>
 
              <FlatList
@@ -251,25 +251,34 @@ export default function PatientScreen({ route, navigation }: any) {
                renderItem={({item}) => (
                  <View style={styles.card}>
                    <View style={styles.cardHeader}>
-                     <Text style={styles.cardTitle}>{item.department} - {item.doctor_name}</Text>
-                     <Text style={{color: item.status==='waiting'?'#e67e22':'#27ae60', fontWeight:'bold'}}>
-                       {item.status==='waiting'?'대기중':'진료중'}
-                     </Text>
+                     <Text style={styles.cardTitle}>{item.department} - {item.doctor_name} 선생님</Text>
+                     <View style={[styles.statusBadge, item.status === 'waiting' ? {backgroundColor: '#fdf2e9'} : {backgroundColor: '#eafaf1'}]}>
+                       <Text style={[styles.statusText, item.status === 'waiting' ? {color: '#e67e22'} : {color: '#27ae60'}]}>
+                          {item.status === 'waiting' ? '대기중' : '진료중'}
+                       </Text>
+                     </View>
                    </View>
-                   <Text style={{marginBottom:5}}>📅 {safeDate(item.date)}  🕒 {safeTime(item.time)}</Text>
-                   <Text style={{color:'#777'}}>증상: {item.symptoms || '-'}</Text>
+                   <View style={{flexDirection:'row', marginBottom:10, alignItems:'center'}}>
+                      <Text style={{fontSize:16, color:'#555'}}>📅 {safeDate(item.date)}</Text>
+                      <Text style={{fontSize:16, color:'#555', marginLeft:15}}>🕒 {safeTime(item.time)}</Text>
+                   </View>
+                   <View style={{backgroundColor:'#f9fafb', padding:10, borderRadius:8, marginBottom:15}}>
+                     <Text style={{color:'#555'}}>증상: {item.symptoms || '입력된 증상이 없습니다.'}</Text>
+                   </View>
                    
-                   {item.status === 'waiting' && (
-                     <View style={{flexDirection:'row', justifyContent:'flex-end', marginTop:10, gap:10}}>
-                       <TouchableOpacity style={styles.outlineBtn} onPress={()=>{
+                   {item.status === 'waiting' ? (
+                     <View style={{flexDirection:'row', justifyContent:'flex-end', gap:10}}>
+                       <TouchableOpacity style={styles.outlineBtnBlue} onPress={()=>{
                           setTargetAppt(item); setEditDate(safeDate(item.date)); setEditTime(safeTime(item.time)); setEditModalVisible(true);
                        }}>
-                         <Text style={{color:'#3498db'}}>변경</Text>
+                         <Text style={{color:'#3498db', fontWeight:'bold', fontSize:13}}>예약 변경</Text>
                        </TouchableOpacity>
-                       <TouchableOpacity style={[styles.outlineBtn, {borderColor:'#ff6b6b'}]} onPress={()=>handleCancelAppt(item.id)}>
-                         <Text style={{color:'#ff6b6b'}}>취소</Text>
+                       <TouchableOpacity style={styles.outlineBtnRed} onPress={()=>handleCancelAppt(item.id)}>
+                         <Text style={{color:'#ff6b6b', fontWeight:'bold', fontSize:13}}>예약 취소</Text>
                        </TouchableOpacity>
                      </View>
+                   ) : (
+                      <Text style={{textAlign:'center', color:'#27ae60', fontWeight:'bold'}}>👨‍⚕️ 진료가 진행 중입니다.</Text>
                    )}
                  </View>
                )}
@@ -278,20 +287,40 @@ export default function PatientScreen({ route, navigation }: any) {
           </View>
         )}
 
-        {/* [탭 2] 진료 기록 */}
+        {/* [탭 2] 진료 기록 (스크린샷 스타일 적용) */}
         {activeTab === 'history' && (
           <View style={{flex:1}}>
             <FlatList
               data={historyList}
               keyExtractor={(item) => item.id.toString()}
               refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh}/>}
+              contentContainerStyle={{paddingBottom:20}}
               renderItem={({item}) => (
                 <View style={styles.card}>
-                  <Text style={styles.cardTitle}>{item.doctor_name} ({item.department})</Text>
-                  <Text style={{color:'#555', marginBottom:10}}>{safeDate(item.date)} 진료완료</Text>
+                  <View style={{flexDirection:'row', justifyContent:'space-between', marginBottom:5}}>
+                    <Text style={{fontSize:16, fontWeight:'bold', color:'#1f2937'}}>
+                      {item.doctor_name} 선생님 ({item.department})
+                    </Text>
+                    <Text style={{fontSize:12, color:'#9ca3af'}}>진료완료</Text>
+                  </View>
+                  <Text style={{color:'#6b7280', marginBottom:15, fontSize:13}}>
+                    {safeDate(item.date)} 진료
+                  </Text>
+                  
+                  {/* 회색 박스 영역 */}
                   <View style={styles.resultBox}>
-                    <Text>병명: {item.diagnosis}</Text>
-                    <Text>처방: {item.prescription}</Text>
+                    <View style={styles.resultRow}>
+                       <Text style={styles.resultLabel}>병명:</Text>
+                       <Text style={styles.resultValue}>{item.diagnosis || '-'}</Text>
+                    </View>
+                    <View style={styles.resultRow}>
+                       <Text style={styles.resultLabel}>처방:</Text>
+                       <Text style={styles.resultValue}>{item.prescription || '-'}</Text>
+                    </View>
+                    <View style={styles.resultRow}>
+                       <Text style={styles.resultLabel}>소견:</Text>
+                       <Text style={styles.resultValue}>{item.doctor_opinion || '-'}</Text>
+                    </View>
                   </View>
                 </View>
               )}
@@ -300,35 +329,65 @@ export default function PatientScreen({ route, navigation }: any) {
           </View>
         )}
 
-        {/* [탭 3] 게시판 */}
+        {/* [탭 3] 게시판 (스크린샷 스타일 적용) */}
         {activeTab === 'board' && (
            <View style={{flex:1}}>
              <TouchableOpacity style={styles.addBtn} onPress={()=>{
                 setIsEditMode(false); setPostTitle(''); setPostContent(''); setWriteModalVisible(true);
              }}>
-               <Text style={styles.addBtnText}>✏️ 글쓰기</Text>
+               <Text style={styles.addBtnText}>✏️ 새 글 작성하기</Text>
              </TouchableOpacity>
+
              <FlatList
                data={posts}
                keyExtractor={(item) => item.id.toString()}
                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh}/>}
-               renderItem={({item}) => (
-                 <View style={styles.card}>
-                   <View style={{flexDirection:'row', justifyContent:'space-between'}}>
-                     <Text style={[styles.cardTitle, {fontSize:16}]}>{item.title}</Text>
-                     <Text style={{fontSize:12, color:'#999'}}>{item.author_name}</Text>
+               contentContainerStyle={{paddingBottom:20}}
+               renderItem={({item}) => {
+                 const isMyPost = item.user_id == userId;
+                 const badgeColor = item.category === 'system_error' ? '#f39c12' : '#3b82f6';
+                 const badgeText = item.category === 'system_error' ? '오류' : 'Q&A';
+
+                 return (
+                   <View style={styles.card}>
+                     <View style={{flexDirection:'row', justifyContent:'space-between', alignItems:'center', marginBottom:8}}>
+                       <View style={{flexDirection:'row', alignItems:'center'}}>
+                         <View style={[styles.badge, {backgroundColor: badgeColor}]}>
+                           <Text style={styles.badgeText}>{badgeText}</Text>
+                         </View>
+                         <Text style={{fontSize:13, color:'#9ca3af', marginLeft:8}}>
+                           {safeDate(item.created_at)}
+                         </Text>
+                       </View>
+                       <Text style={{fontSize:13, color:'#6b7280'}}>
+                         {item.author_name}
+                       </Text>
+                     </View>
+
+                     <Text style={styles.boardTitle}>{item.title}</Text>
+                     <Text style={styles.boardContent} numberOfLines={2}>{item.content}</Text>
+                     
+                     {isMyPost && (
+                        <View style={{flexDirection:'row', justifyContent:'flex-end', gap:8, marginTop:15}}>
+                          <TouchableOpacity 
+                            style={styles.outlineBtnBlueSmall}
+                            onPress={()=>{
+                               setIsEditMode(true); setTargetPostId(item.id); setPostTitle(item.title); setPostContent(item.content); setWriteModalVisible(true);
+                            }}
+                          >
+                            <Text style={{color:'#3b82f6', fontSize:12, fontWeight:'600'}}>수정</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity 
+                            style={styles.outlineBtnRedSmall}
+                            onPress={()=>handleDeletePost(item.id)}
+                          >
+                            <Text style={{color:'#ef4444', fontSize:12, fontWeight:'600'}}>삭제</Text>
+                          </TouchableOpacity>
+                        </View>
+                     )}
                    </View>
-                   <Text style={{color:'#555', marginVertical:5}} numberOfLines={2}>{item.content}</Text>
-                   {item.user_id == userId && (
-                      <View style={{flexDirection:'row', justifyContent:'flex-end', gap:10}}>
-                        <TouchableOpacity onPress={()=>{
-                           setIsEditMode(true); setTargetPostId(item.id); setPostTitle(item.title); setPostContent(item.content); setWriteModalVisible(true);
-                        }}><Text style={{color:'#3498db'}}>수정</Text></TouchableOpacity>
-                        <TouchableOpacity onPress={()=>handleDeletePost(item.id)}><Text style={{color:'#e74c3c'}}>삭제</Text></TouchableOpacity>
-                      </View>
-                   )}
-                 </View>
-               )}
+                 );
+               }}
                ListEmptyComponent={<Text style={styles.emptyText}>게시글이 없습니다.</Text>}
              />
            </View>
@@ -375,13 +434,12 @@ export default function PatientScreen({ route, navigation }: any) {
         </View>
       </Modal>
 
-      {/* === 모달: 예약 변경 (새 예약과 동일한 전체화면 스타일 적용) === */}
+      {/* === 모달: 예약 변경 === */}
       <Modal visible={editModalVisible} animationType="slide">
         <View style={styles.modalContainer}>
            <Text style={styles.modalTitle}>예약 변경</Text>
 
-           {/* 변경 대상 정보 표시 */}
-           <View style={{backgroundColor:'#f0f0f0', padding:15, borderRadius:8, marginBottom:20}}>
+           <View style={{backgroundColor:'#f3f4f6', padding:15, borderRadius:8, marginBottom:20}}>
               <Text style={{fontSize:16, fontWeight:'bold', color:'#333'}}>
                 {targetAppt?.department} - {targetAppt?.doctor_name} 선생님
               </Text>
@@ -457,8 +515,16 @@ export default function PatientScreen({ route, navigation }: any) {
             <Text style={styles.modalTitle}>{isEditMode?'글 수정':'새 글 작성'}</Text>
             <Text style={styles.label}>카테고리</Text>
             <View style={{flexDirection:'row', gap:10, marginBottom:10}}>
-               <TouchableOpacity onPress={()=>setPostCategory('Q&A')} style={[styles.chip, postCategory==='Q&A'&&styles.activeChip]}><Text>Q&A</Text></TouchableOpacity>
-               <TouchableOpacity onPress={()=>setPostCategory('system_error')} style={[styles.chip, postCategory==='system_error'&&styles.activeChip]}><Text>오류신고</Text></TouchableOpacity>
+               <TouchableOpacity onPress={()=>setPostCategory('Q&A')} style={[styles.chip, postCategory==='Q&A'&&styles.activeChip]}><Text style={{color:postCategory==='Q&A'?'white':'#555'}}>Q&A</Text></TouchableOpacity>
+               <TouchableOpacity 
+                  onPress={()=>setPostCategory('system_error')} 
+                  style={[
+                    styles.chip, 
+                    postCategory==='system_error' && { backgroundColor: '#f39c12', borderColor: '#f39c12' }
+                  ]}
+               >
+                  <Text style={{color:postCategory==='system_error'?'white':'#555'}}>오류신고</Text>
+               </TouchableOpacity>
             </View>
             <Text style={styles.label}>제목</Text>
             <TextInput style={styles.input} value={postTitle} onChangeText={setPostTitle} placeholder="제목"/>
@@ -475,45 +541,69 @@ export default function PatientScreen({ route, navigation }: any) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f5f6fa' },
-  header: { padding: 20, paddingTop:50, flexDirection:'row', justifyContent:'space-between', alignItems:'center', backgroundColor:'white', elevation:2 },
-  headerTitle: { fontSize: 20, fontWeight: 'bold' },
-  tabContainer: { flexDirection: 'row', backgroundColor:'white' },
+  container: { flex: 1, backgroundColor: '#f3f4f6' },
+  header: { padding: 20, paddingTop:50, flexDirection:'row', justifyContent:'space-between', alignItems:'center', backgroundColor:'white', borderBottomWidth:1, borderColor:'#e5e7eb' },
+  headerTitle: { fontSize: 20, fontWeight: 'bold', color:'#111' },
+  tabContainer: { flexDirection: 'row', backgroundColor:'white', borderBottomWidth:1, borderColor:'#e5e7eb' },
   tabBtn: { flex: 1, padding: 15, alignItems: 'center', borderBottomWidth:2, borderColor:'transparent' },
-  activeTab: { borderColor:'#3498db' },
-  tabText: { color:'#999' },
-  activeTabText: { color:'#3498db', fontWeight:'bold' },
+  activeTab: { borderColor:'#3b82f6' },
+  tabText: { color:'#9ca3af', fontSize:15 },
+  activeTabText: { color:'#3b82f6', fontWeight:'bold' },
   content: { flex: 1, padding: 15 },
-  card: { backgroundColor:'white', padding:15, borderRadius:10, marginBottom:10, elevation:1 },
-  cardHeader: { flexDirection:'row', justifyContent:'space-between', marginBottom:5 },
-  cardTitle: { fontSize:16, fontWeight:'bold' },
-  resultBox: { backgroundColor:'#f9f9f9', padding:10, borderRadius:5, marginTop:5 },
-  addBtn: { backgroundColor:'#3498db', padding:15, borderRadius:10, alignItems:'center', marginBottom:15 },
-  addBtnText: { color:'white', fontWeight:'bold' },
-  emptyText: { textAlign:'center', marginTop:50, color:'#aaa' },
   
-  // 모달 공통
+  // 카드 공통 스타일
+  card: { backgroundColor:'white', padding:20, borderRadius:12, marginBottom:12, elevation:2, shadowColor:'#000', shadowOffset:{width:0, height:1}, shadowOpacity:0.1, shadowRadius:3 },
+  cardHeader: { flexDirection:'row', justifyContent:'space-between', marginBottom:10 },
+  cardTitle: { fontSize:17, fontWeight:'bold', color:'#111' },
+  
+  // 상태 뱃지
+  statusBadge: { paddingVertical:4, paddingHorizontal:8, borderRadius:12 },
+  statusText: { fontSize:12, fontWeight:'bold' },
+
+  // 진료 기록 회색 박스
+  resultBox: { backgroundColor:'#f8f9fa', padding:15, borderRadius:8 },
+  resultRow: { flexDirection:'row', marginBottom:6 },
+  resultLabel: { fontWeight:'bold', color:'#374151', width:40, marginRight:5 },
+  resultValue: { color:'#4b5563', flex:1 },
+
+  // 게시판 스타일
+  badge: { paddingHorizontal:8, paddingVertical:3, borderRadius:4, marginRight:5 },
+  badgeText: { color:'white', fontSize:11, fontWeight:'bold' },
+  boardTitle: { fontSize:16, fontWeight:'bold', color:'#1f2937', marginBottom:6 },
+  boardContent: { color:'#6b7280', lineHeight:20 },
+
+  // 버튼 스타일
+  addBtn: { backgroundColor:'#3498db', padding:15, borderRadius:10, alignItems:'center', marginBottom:15, elevation:3 },
+  addBtnText: { color:'white', fontWeight:'bold', fontSize:16 },
+  
+  outlineBtnBlue: { borderWidth:1, borderColor:'#3b82f6', paddingVertical:8, paddingHorizontal:15, borderRadius:6 },
+  outlineBtnRed: { borderWidth:1, borderColor:'#ef4444', paddingVertical:8, paddingHorizontal:15, borderRadius:6 },
+  
+  outlineBtnBlueSmall: { borderWidth:1, borderColor:'#3b82f6', paddingVertical:5, paddingHorizontal:12, borderRadius:4 },
+  outlineBtnRedSmall: { borderWidth:1, borderColor:'#ef4444', paddingVertical:5, paddingHorizontal:12, borderRadius:4 },
+
+  fullBtn: { padding:15, borderRadius:8, backgroundColor:'#3b82f6', alignItems:'center', width:'100%' },
+  btnText: { color:'white', fontWeight:'bold', fontSize:16 },
+
+  emptyText: { textAlign:'center', marginTop:50, color:'#9ca3af', fontSize:15 },
+  
+  // 모달
   modalOverlay: { flex:1, justifyContent:'center', backgroundColor:'rgba(0,0,0,0.5)', padding:20 },
   modalContent: { backgroundColor:'white', padding:20, borderRadius:10, width:'100%' },
   modalContainer: { flex:1, padding:25, paddingTop:50, backgroundColor:'white' },
-  modalTitle: { fontSize:20, fontWeight:'bold', textAlign:'center', marginBottom:20 },
-  label: { fontSize:14, fontWeight:'bold', marginTop:15, marginBottom:5, color:'#555' },
-  input: { borderWidth:1, borderColor:'#ddd', borderRadius:8, padding:10, fontSize:16 },
-  fullBtn: { padding:15, borderRadius:8, backgroundColor:'#3498db', alignItems:'center' },
-  btnText: { color:'white', fontWeight:'bold', fontSize:16 },
-  outlineBtn: { borderWidth:1, borderColor:'#3498db', paddingVertical:5, paddingHorizontal:10, borderRadius:5 },
+  modalTitle: { fontSize:22, fontWeight:'bold', textAlign:'center', marginBottom:25, color:'#111' },
+  label: { fontSize:15, fontWeight:'bold', marginTop:15, marginBottom:8, color:'#374151' },
+  input: { borderWidth:1, borderColor:'#d1d5db', borderRadius:8, padding:12, fontSize:16, backgroundColor:'#f9fafb' },
   
-  // 날짜/시간 선택 버튼
-  dateBtn: { flex:1, padding:15, borderWidth:1, borderColor:'#ddd', borderRadius:8, alignItems:'center', backgroundColor:'#fafafa', marginHorizontal:5 },
+  // 날짜/시간/칩
+  dateBtn: { flex:1, padding:15, borderWidth:1, borderColor:'#d1d5db', borderRadius:8, alignItems:'center', backgroundColor:'#f9fafb', marginHorizontal:5 },
+  chip: { paddingVertical:8, paddingHorizontal:16, borderWidth:1, borderColor:'#d1d5db', borderRadius:20, marginRight:8, marginBottom:8 },
+  activeChip: { backgroundColor:'#3b82f6', borderColor:'#3b82f6' },
+  doctorBox: { maxHeight:150, borderWidth:1, borderColor:'#e5e7eb', marginBottom:10, borderRadius:8 },
+  docItem: { padding:15, borderBottomWidth:1, borderColor:'#f3f4f6' },
   
-  // 칩 & 리스트
-  chip: { paddingVertical:8, paddingHorizontal:15, borderWidth:1, borderColor:'#ddd', borderRadius:20, marginRight:5, marginBottom:5 },
-  activeChip: { backgroundColor:'#3498db', borderColor:'#3498db' },
-  doctorBox: { maxHeight:120, borderWidth:1, borderColor:'#eee', marginBottom:10 },
-  docItem: { padding:10, borderBottomWidth:1, borderColor:'#eee' },
-
-  // 달력 & 시간 슬롯
+  // 달력/시간 슬롯
   calDayCell: { width: '14.28%', aspectRatio: 1, justifyContent:'center', alignItems:'center', marginVertical: 2 },
-  calDaySelected: { backgroundColor:'#3498db', borderRadius:20 },
-  timeSlot: { paddingVertical:10, paddingHorizontal:15, borderRadius:8, borderWidth:1, borderColor:'#ddd', margin:5, backgroundColor:'#fff' },
+  calDaySelected: { backgroundColor:'#3b82f6', borderRadius:20 },
+  timeSlot: { paddingVertical:10, paddingHorizontal:15, borderRadius:8, borderWidth:1, borderColor:'#d1d5db', margin:5, backgroundColor:'#fff' },
 });

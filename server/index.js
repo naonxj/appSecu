@@ -172,11 +172,27 @@ app.put('/api/appointments/change/:id', (req, res) => {
 
 // 16. [관리자] 유저 관리
 app.get('/api/users', (req, res) => {
-  db.query("SELECT id, username, role, name, department, created_at FROM users ORDER BY created_at DESC", (err, r) => res.send(r));
+  db.query("SELECT id, username,password, role, name, department, created_at FROM users ORDER BY created_at DESC", (err, r) => res.send(r));
 });
 
 app.delete('/api/users/:id', (req, res) => {
   db.query("DELETE FROM users WHERE id=?", [req.params.id], (err) => res.send({msg:'ok'}));
+});
+
+// 17. [관리자] 사용자 정보 수정 (비번, 아이디 등)
+app.put('/api/users/:id', (req, res) => {
+  const { username, password, name, department } = req.body;
+  
+  const sql = "UPDATE users SET username=?, password=?, name=?, department=? WHERE id=?";
+  
+  db.query(sql, [username, password, name, department, req.params.id], (err, result) => {
+    if (err) {
+      console.error(err);
+      res.status(500).send({ message: '수정 실패' });
+    } else {
+      res.send({ message: '수정 성공' });
+    }
+  });
 });
 
 app.listen(3000, () => console.log('Server running on port 3000'));

@@ -19,8 +19,9 @@ import AdminScreen from './screens/AdminScreen';
 const Stack = createNativeStackNavigator();
 
 // 1. 실제 폰 테스트: PC의 IP 주소 (예: 192.168.0.x:3000/api)
+const API_URL = 'http://192.168.16.40:3000/api';
 // 2. 에뮬레이터 테스트: 10.0.2.2 사용
-const API_URL = 'http://10.0.2.2:3000/api';
+//const API_URL = 'http://10.0.2.2:3000/api';
 
 // --- 1. 로그인/회원가입 화면 ---
 // navigation의 타입을 간단하게 any로 처리했습니다.

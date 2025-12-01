@@ -7,6 +7,12 @@ const app = express();
 app.use(cors());
 app.use(bodyParser.json());
 
+// 서버 로그를 찍어서 실제 요청이 들어오는지 확인 
+app.use((req, res, next) => {
+  console.log("REQ:", req.method, req.url);
+  next();
+});
+
 // ★ DB 설정 (본인 환경에 맞게 수정)
 const db = mysql.createConnection({
   host: '192.168.16.7',    
@@ -21,6 +27,11 @@ db.connect((err) => {
 });
 
 // --- API 시작 ---
+// test
+app.get('/api', (req, res) => {
+  res.json({ message: "API connected" });
+});
+
 
 // 1. 회원가입
 app.post('/api/register', (req, res) => {
@@ -194,5 +205,10 @@ app.put('/api/users/:id', (req, res) => {
     }
   });
 });
-
-app.listen(3000, () => console.log('Server running on port 3000'));
+app.get('/api', (req, res) => {
+  res.json({ message: "API connected" });
+});
+//app.listen(3000, () => console.log('Server running on port 3000'));
+app.listen(3000, "0.0.0.0", () => {
+  console.log('Server running on port 3000');
+});

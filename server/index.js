@@ -13,6 +13,7 @@ app.use((req, res, next) => {
   next();
 });
 
+// M1 취약점 (DB 접속정보가 코드에 평문으로 적혀있다. )
 // ★ DB 설정 (본인 환경에 맞게 수정)
 const db = mysql.createConnection({
   host: '192.168.16.7',    
@@ -26,11 +27,6 @@ db.connect((err) => {
   else console.log('MySQL 연결 성공!');
 });
 
-// --- API 시작 ---
-// test
-app.get('/api', (req, res) => {
-  res.json({ message: "API connected" });
-});
 
 
 // 1. 회원가입
@@ -45,12 +41,23 @@ app.post('/api/register', (req, res) => {
 });
 
 // 2. 로그인
+// M4: SQL INJECTION 취약점 구현
 app.post('/api/login', (req, res) => {
   const { username, password } = req.body;
-  const sql = 'SELECT * FROM users WHERE username = ? AND password = ?';
-  db.query(sql, [username, password], (err, results) => {
-    if (err || results.length === 0) res.status(401).send({ message: 'Fail' });
-    else {
+  // 만약 username에 " ' OR '1'='1 "이 들어오면
+  // const sql = 'SELECT * FROM users WHERE username = ? AND password = ?';
+  const sql = `SELECT * FROM users WHERE username = '${username}' AND password = '${password}'`;
+  console.log("⚡ 실행될 SQL 문장:", sql);
+  
+  db.query(sql, (err, results) => {
+    if (err) {
+      console.error("SQL 에러:", err);
+      res.status(500).send({ message: 'DB Error' });
+    } else if (results.length === 0) {
+      console.log("결과 없음 (로그인 실패)");
+      res.status(401).send({ message: 'Fail' });
+    } else {
+      console.log("로그인 성공! 사용자:", results[0].username);
       const u = results[0];
       res.send({ message: 'Login OK', role: u.role, username: u.username, name: u.name, id: u.id });
     }
@@ -123,7 +130,7 @@ app.get('/api/doctor/patient/:id', (req, res) => {
 
 // ★★★ [중요] 게시판 관련 API (9~12번) ★★★
 
-// 9. [게시판] 목록 조회 (이 부분이 없어서 에러가 났던 겁니다!)
+// 9. [게시판] 목록 조회 
 app.get('/api/posts', (req, res) => {
   db.query("SELECT * FROM posts ORDER BY created_at DESC", (err, results) => {
     if (err) {
@@ -136,10 +143,13 @@ app.get('/api/posts', (req, res) => {
 });
 
 // 10. [게시판] 글 작성
+// M4: XSS 취약점 구현
 app.post('/api/posts', (req, res) => {
   console.log("글 작성 요청:", req.body);
   const { user_id, author_name, category, title, content, file_path } = req.body;
-  const sql = "INSERT INTO posts (user_id, author_name, category, title, content, file_path) VALUES (?, ?, ?, ?, ?, ?)";
+  // 사용자가 <script>alert(1)</script>를 보내도 그대로 DB에 저장함
+  //const sql = "INSERT INTO posts (user_id, author_name, category, title, content, file_path) VALUES (?, ?, ?, ?, ?, ?)";
+  const sql = "INSERT INTO posts (title, content, ...) VALUES ('" + title + "', '" + content + "', ...)"; 
   db.query(sql, [user_id, author_name, category, title, content, file_path], (err) => {
     if (err) { console.error(err); res.status(500).send(err); }
     else { console.log("DB 저장 성공"); res.send({ message: 'OK' }); }

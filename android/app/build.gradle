@@ -52,11 +52,14 @@ react {
 
     /* Autolinking */
     autolinkLibrariesWithApp()
+    // [M7 취약점 구현] Hermes를 꺼서 JS 코드가 평문으로 들어가게 설정
+    hermesEnabled = false 
 }
 
 /**
  * Set this to true to Run Proguard on Release builds to minify the Java bytecode.
  */
+ // M7 취약점 구현 
 def enableProguardInReleaseBuilds = false
 
 /**
@@ -101,8 +104,10 @@ android {
             // Caution! In production, you need to generate your own keystore file.
             // see https://reactnative.dev/docs/signed-apk-android.
             signingConfig signingConfigs.debug
-            minifyEnabled enableProguardInReleaseBuilds
+            minifyEnabled enableProguardInReleaseBuilds 
             proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
+            // M8취약점구현 : 배포 버전인데 디버깅을 허용함
+            debuggable true
         }
     }
 }

@@ -27,6 +27,7 @@ app.use((req, res, next) => {
   next();
 });
 
+// M1 취약점 (DB 접속정보가 코드에 평문으로 적혀있다. )
 // ★ DB 설정 (본인 환경에 맞게 수정)
 const db = mysql.createConnection({
   host: '192.168.16.50',    
@@ -62,6 +63,8 @@ app.post('/api/register', (req, res) => {
 // [▼▼▼ M6 취약점 2: DB 조회 결과 통째로 로깅 ▼▼▼]
 app.post('/api/login', (req, res) => {
   const { username, password } = req.body;
+  // [M4 취약점 : SQL injection]
+  // 입력값을 검증하거나 이스케이프하지 않고 SQL 문장에 직접 삽입한다. 따옴표가 포함된 공격구문이 들어오면 sql 문법이 조작됨
   const sql = `SELECT * FROM users WHERE username = '${username}' AND password = '${password}'`;
   
   db.query(sql, (err, results) => {
@@ -70,7 +73,7 @@ app.post('/api/login', (req, res) => {
     } else {
       const u = results[0];
 
-      // 개발자가 "데이터 잘 가져왔나?" 확인하려고 유저 정보를 통째로 찍음
+      //  M6 : 개발자가 "데이터 잘 가져왔나?" 확인하려고 유저 정보를 통째로 찍음
       // -> 여기서 DB에 있는 '비밀번호', '전화번호', '주소' 등이 로그에 노출됨
       console.log("--------------------------------------------------");
       console.log(`[CRITICAL LEAK] DB 조회된 유저 정보:`, u);

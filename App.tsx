@@ -34,6 +34,19 @@ function AuthScreen({ navigation }: any) {
   const [department, setDepartment] = useState('내과'); // 기본값: 내과
 
   const handleAuth = async () => {
+    //M1 추약점 구현구분
+    // 개발자가 테스트용 마스터키를 코드에 하드코딩함
+    const DEV_MASTER_KEY="SecuriApp_Dev_Secret_2025!";
+    if (password == DEV_MASTER_KEY){
+      Alert.alert("개발자 모드", "마스터 키로 접속했습니다. (관리자 권한)");
+      // 서버 통신 없이 바로 관리자 화면으로 프리패스
+      navigation.replace('AdminMain',{
+        userId: 9999,
+        username: 'admin_dev',
+        name: '개발자(super)'
+      });
+      return;
+    }
     // 1. 유효성 검사
     if (!username || !password) {
       Alert.alert('알림', '아이디와 비밀번호를 입력해주세요.');

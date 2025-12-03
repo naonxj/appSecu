@@ -170,18 +170,22 @@ export default function DoctorScreen({ route, navigation }: any) {
     }
   };
 
+  // 수정 1: 환자 검색 시 userId(의사ID)를 함께 전송
   const searchPatients = async () => {
     try {
       const query = keyword ? keyword : '';
-      const res = await fetch(`${API_URL}/doctor/patients/search?keyword=${query}`);
+      // url 뒤에 &doctorId=${userId} 추가
+      const res = await fetch(`${API_URL}/doctor/patients/search?keyword=${query}&doctorId=${userId}`);
       const data = await res.json();
       setSearchResult(Array.isArray(data) ? data : []);
     } catch(e) { console.error(e); }
   };
 
+  // 수정 2: 상세 조회 시 userId(의사ID)를 함께 전송
   const showPatientDetail = async (patientId: number) => {
     try {
-      const res = await fetch(`${API_URL}/doctor/patient/${patientId}`);
+      // url 뒤에 ?doctorId=${userId} 추가
+      const res = await fetch(`${API_URL}/doctor/patient/${patientId}?doctorId=${userId}`);
       const data = await res.json();
       setSelectedPatientInfo(data.info);      
       setSelectedPatientHistory(Array.isArray(data.history) ? data.history : []);

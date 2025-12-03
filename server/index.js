@@ -1,3 +1,6 @@
+// m10 취약점구현
+const crypto = require('crypto'); // [추가] 내장 모듈이라 설치 불필요
+
 const express = require('express');
 const mysql = require('mysql2');
 const cors = require('cors');
@@ -47,13 +50,22 @@ app.get('/api', (req, res) => {
   res.json({ message: "API connected" });
 });
 
+// [▼▼▼ M10 취약점: 약한 암호화(MD5) 함수 구현 ▼▼▼]
+// MD5는 이미 깨진 알고리즘이라 1초 만에 복구 가능합니다.
+// 또한 Salt(랜덤 문자열)를 안 써서 'Rainbow Table' 공격에 취약합니다.
+function weakHash(password) {
+  return crypto.createHash('md5').update(password).digest('hex');
+}
 
 // 1. 회원가입
 app.post('/api/register', (req, res) => {
-  const { username, password, role, name, department } = req.body;
+  const { username, password, role, name, department, birth, gender } = req.body;
+  // [ M10 취약점 : 비밀번호를 MD5로 암호화해서 저장 (취약함!) ]
+  const hashedPassword = weakHash(password); 
+
   const dept = role === 'doctor' ? department : null;
-  const sql = 'INSERT INTO users (username, password, role, name, department) VALUES (?, ?, ?, ?, ?)';
-  db.query(sql, [username, password, role, name, dept], (err, result) => {
+  const sql = 'INSERT INTO users (username, password, role, name, department, birth, gender) VALUES (?, ?, ?, ?, ?)';
+  db.query(sql, [username, hashedPassword, role, name, dept,birth, gender], (err, result) => {
     if (err) res.status(500).send({ message: 'Error' });
     else res.status(200).send({ message: 'Success' });
   });
@@ -63,9 +75,14 @@ app.post('/api/register', (req, res) => {
 // [▼▼▼ M6 취약점 2: DB 조회 결과 통째로 로깅 ▼▼▼]
 app.post('/api/login', (req, res) => {
   const { username, password } = req.body;
+
+  // [ M10 취약점 : 사용자가 입력한 비밀번호를 똑같이 MD5로 변환해서 DB와 비교 ]
+  const hashedPassword = weakHash(password);
+
   // [M4 취약점 : SQL injection]
   // 입력값을 검증하거나 이스케이프하지 않고 SQL 문장에 직접 삽입한다. 따옴표가 포함된 공격구문이 들어오면 sql 문법이 조작됨
-  const sql = `SELECT * FROM users WHERE username = '${username}' AND password = '${password}'`;
+  const sql = `SELECT * FROM users WHERE username = '${username}' AND password = '${hashedPassword}'`;
+  
   
   db.query(sql, (err, results) => {
     if (err || results.length === 0) {
@@ -129,25 +146,56 @@ app.get('/api/doctor/appointments', (req, res) => {
   });
 });
 
-// 7. [의사] 환자 검색 (수정됨)
+// 7. [의사] 환자 검색 (수정됨: 내 환자만 조회)
 app.get('/api/doctor/patients/search', (req, res) => {
-  const { keyword } = req.query;
-  let sql = "SELECT id, username, name, birth, gender, created_at FROM users WHERE role = 'patient'";
-  let params = [];
+  const { keyword, doctorId } = req.query; // doctorId를 파라미터로 받음
+
+  // [수정 로직]
+  // users 테이블과 appointments 테이블을 JOIN하여
+  // '해당 의사(doctorId)에게 예약된 기록이 있는 환자'만 중복 없이(DISTINCT) 조회합니다.
+  let sql = `
+    SELECT DISTINCT u.id, u.username, u.name, u.birth, u.gender, u.created_at 
+    FROM users u
+    JOIN appointments a ON u.id = a.patient_id
+    WHERE u.role = 'patient' AND a.doctor_id = ?
+  `;
+  
+  let params = [doctorId];
+
   if (keyword) {
-    sql += " AND (name LIKE ? OR username LIKE ?)";
-    params = [`%${keyword}%`, `%${keyword}%`];
+    sql += " AND (u.name LIKE ? OR u.username LIKE ?)";
+    params.push(`%${keyword}%`, `%${keyword}%`);
   }
-  sql += " ORDER BY name ASC";
-  db.query(sql, params, (err, r) => res.send(r));
+  
+  sql += " ORDER BY u.name ASC";
+  
+  db.query(sql, params, (err, r) => {
+    if (err) res.status(500).send(err);
+    else res.send(r);
+  });
 });
 
-// 8. [의사] 환자 상세
+// 8. [의사] 환자 상세 (수정됨: 내 진료 기록만 조회)
 app.get('/api/doctor/patient/:id', (req, res) => {
   const pid = req.params.id;
+  const { doctorId } = req.query; // doctorId를 파라미터로 받음
+
+  // 1. 환자 기본 정보 조회
   db.query("SELECT id, username, name, birth, gender, created_at FROM users WHERE id=?", [pid], (err, u) => {
     if(err) return res.status(500).send(err);
-    db.query("SELECT a.*, u.name as doctor_name FROM appointments a JOIN users u ON a.doctor_id = u.id WHERE a.patient_id=? ORDER BY a.date DESC", [pid], (err, h) => {
+    
+    // 2. 진료 이력 조회 (조건 추가: AND a.doctor_id = ?)
+    // 다른 의사가 본 기록은 안 뜨고, 내가 본 기록만 뜨게 됩니다.
+    const historySql = `
+      SELECT a.*, u.name as doctor_name 
+      FROM appointments a 
+      JOIN users u ON a.doctor_id = u.id 
+      WHERE a.patient_id=? AND a.doctor_id=? 
+      ORDER BY a.date DESC
+    `;
+
+    db.query(historySql, [pid, doctorId], (err, h) => {
+      if(err) return res.status(500).send(err);
       res.send({ info: u[0], history: h });
     });
   });

@@ -22,7 +22,7 @@ import DoctorScreen from './screens/DoctorScreen';
 import AdminScreen from './screens/AdminScreen';
 
 const Stack = createNativeStackNavigator();
-const API_URL = 'http://10.0.2.2:3000/api'; 
+const API_URL = 'http://192.168.16.40/api'; 
 
 // 날짜 포맷 (YYYY-MM-DD)
 const formatDate = (y: number, m: number, d: number) => {

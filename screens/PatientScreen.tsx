@@ -3,8 +3,8 @@ import {
   View, Text, FlatList, Alert, StyleSheet, TouchableOpacity, TextInput, Modal, ScrollView, RefreshControl
 } from 'react-native';
 
-const API_URL = 'http://10.0.2.2:3000/api'; // 실기기 테스트 시 본인 PC IP로 변경 필수
-
+// const API_URL = 'http://10.0.2.2:3000/api'; // 실기기 테스트 시 본인 PC IP로 변경 필수
+const API_URL = 'http://192.168.16.40:3000/api';
 // 시간 슬롯 생성
 const TIME_SLOTS = [
   '09:00', '09:30', '10:00', '10:30', '11:00', '11:30',
@@ -454,7 +454,7 @@ export default function PatientScreen({ route, navigation }: any) {
           <ScrollView>
             <Text style={styles.label}>1. 진료과 선택</Text>
             <View style={{flexDirection:'row', flexWrap:'wrap', marginBottom:10}}>
-              {['내과', '정형외과', '치과', '안과', '피부과'].map(dept => (
+              {['내과', '정형외과', '치과', '산부인과', '피부과'].map(dept => (
                 <TouchableOpacity key={dept} 
                   style={[styles.chip, selectedDept===dept && styles.activeChip]} 
                   onPress={()=>{ setSelectedDept(dept); setSelectedDoctorId(null); }}>

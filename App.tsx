@@ -14,8 +14,6 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import PatientScreen from './screens/PatientScreen';
 import DoctorScreen from './screens/DoctorScreen';
 import AdminScreen from './screens/AdminScreen';
-// 취약점 M9 구현위한 라이브러리 : 자동로그인위해 사용자의 아이디와 비번을 AsyncStorage에 저장하도록구현
-import AsyncStorage from '@react-native-async-storage/async-storage'; 
 
 // TypeScript에서 네비게이터 스택을 정의합니다.
 const Stack = createNativeStackNavigator();
@@ -68,17 +66,7 @@ function AuthScreen({ navigation }: any) {
 
       if (response.ok) {
         if (isLogin) {
-          // [M9 취약점 구현 코드 추가]
-          // 편리한 '자동 로그인' 기능을 위함이라며, 비밀번호를 암호화 없이 저장해버림
-          try {
-            console.log(`[M9 취약점] 아이디와 비밀번호를 기기에 평문으로 저장합니다.`);
-            await AsyncStorage.setItem('saved_userid', username);
-            // ★ 여기가 핵심 취약점: 비밀번호를 평문(Plain text) 그대로 저장
-            await AsyncStorage.setItem('saved_password', password); 
-          } catch (e) {
-            console.error("저장 실패", e);
-          }
-
+          
           Alert.alert('환영합니다', `${data.username}님 로그인되었습니다.`);
           // 역할에 따른 화면 이동
           const userInfo = {userId: data.id, username: data.username, name:data.name};

@@ -4,7 +4,7 @@ import {
 } from 'react-native';
 
 //const API_URL = 'http://10.0.2.2:3000/api'; // 실기기 테스트 시 본인 PC IP로 변경 필수
-const API_URL = 'http://192.168.16.40:3000/api';
+const API_URL = 'http://192.168.16.50/api';
 // 시간 슬롯 생성
 const TIME_SLOTS = [
   '09:00', '09:30', '10:00', '10:30', '11:00', '11:30',
@@ -40,7 +40,12 @@ const safeTime = (timeStr: any) => {
 export default function PatientScreen({ route, navigation }: any) {
   // 파라미터 안전하게 받기
   const params = route?.params || {};
-  const { userId, name } = params;
+
+  //1219수정
+  console.log("환자화면 진입 시 받은 파라미터:", params); // <- 여기서 userId가 찍혀야 합니다.
+  //const { userId, name } = params;
+  const userId = params.userId; 
+  const name = params.name;
 
   const [activeTab, setActiveTab] = useState('reservation');
   const [refreshing, setRefreshing] = useState(false);
@@ -201,6 +206,11 @@ export default function PatientScreen({ route, navigation }: any) {
   const handlePostSubmit = async () => { 
     if(!postTitle || !postContent) { Alert.alert("알림", "제목과 내용을 입력하세요."); return; }
     try {
+      //1219 수정
+      if (!userId) {
+        Alert.alert("오류", "로그인 정보가 없습니다. 다시 로그인해주세요.");
+        return;
+      }
       const body = {
         user_id: userId,
         author_name: name || '익명',

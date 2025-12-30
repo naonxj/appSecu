@@ -10,10 +10,7 @@ const app = express();
 app.use(cors());
 app.use(bodyParser.json());
 
-// [ M4 취약점 설정 1: 입력 크기 제한 해제 ]
-// 원래는 100kb 정도가 기본이지만, 공격을 허용하기 위해 제한을 무식하게 늘립니다.
-app.use(bodyParser.json({ limit: '5000mb' })); 
-app.use(bodyParser.urlencoded({ limit: '5000mb', extended: true }));
+
 
 // [M6 취약점 1: 과도한 로그 남기기 (Global Logging)]
 // 들어오는 모든 요청의 본문(Body)을 콘솔에 그대로 찍습니다.
@@ -33,7 +30,7 @@ app.use((req, res, next) => {
 // M1 취약점 (DB 접속정보가 코드에 평문으로 적혀있다. )
 // ★ DB 설정 (본인 환경에 맞게 수정)
 const db = mysql.createConnection({
-  host: '192.168.16.50',    
+  host: 'localhost',    
   user: 'appmaster',       
   password: 'pass123',     
   database: 'hospital_app' 
@@ -83,7 +80,6 @@ app.post('/api/login', (req, res) => {
   // 입력값을 검증하거나 이스케이프하지 않고 SQL 문장에 직접 삽입한다. 따옴표가 포함된 공격구문이 들어오면 sql 문법이 조작됨
   const sql = `SELECT * FROM users WHERE username = '${username}' AND password = '${hashedPassword}'`;
   
-  
   db.query(sql, (err, results) => {
     if (err || results.length === 0) {
       res.status(401).send({ message: 'Fail' });
@@ -106,17 +102,25 @@ app.get('/api/doctors', (req, res) => {
   db.query("SELECT id, username, name, department FROM users WHERE role = 'doctor'", (err, r) => res.send(r));
 });
 
-// 4. 예약하기
-// [▼▼▼ M6 취약점 3: 민감한 의료 정보 로깅 ▼▼▼]
+// 4. 예약하기 (로그 노출 취약점 + 실제 저장 로직 합치기)
 app.post('/api/appointments', (req, res) => {
-  const { patient_id, symptoms } = req.body; // symptoms: 에이즈, 성병, 정신과 기록 등 민감 정보
-  
-  // "누가 어떤 병에 걸렸는지" 로그에 남음
-  console.log(`[MEDICAL LEAK] 환자ID(${patient_id})의 증상: ${symptoms}`);
+  const { patient_id, doctor_id, date, time, symptoms } = req.body;
 
-  // ... (저장 로직 생략, 기존 코드 유지) ...
-  // 임시 응답
-  res.send({ message: 'OK' });
+  // [M6 취약점 유지] 환자의 민감한 증상을 서버 로그에 평문으로 남김
+  console.log(`[MEDICAL LEAK] 환자ID(${patient_id})가 의사ID(${doctor_id})에게 예약함. 증상: ${symptoms}`);
+
+  // [기능 복구] 실제 DB에 저장하는 쿼리
+  const sql = "INSERT INTO appointments (patient_id, doctor_id, date, time, status, symptoms) VALUES (?, ?, ?, ?, 'waiting', ?)";
+  
+  db.query(sql, [patient_id, doctor_id, date, time, symptoms], (err, result) => {
+    if (err) {
+      console.error("예약 저장 에러:", err);
+      res.status(500).send(err);
+    } else {
+      console.log("DB 저장 성공! 예약 번호:", result.insertId);
+      res.send({ message: 'OK' });
+    }
+  });
 });
 
 
@@ -215,10 +219,50 @@ app.get('/api/posts', (req, res) => {
   });
 });
 
+
+// [ M4 취약점  1: 대용량 데이터 수신 허용 ]
+// 게시글에 1GB짜리 텍스트를 담아보내도 서버가 거절하지 않고 받는다. 
+app.use(bodyParser.json({ limit: '1024mb' })); 
+app.use(bodyParser.urlencoded({ limit: '1024mb', extended: true }));
+
 // 10. [게시판] 글 작성
+//[M4 취약점 : 2. 게시글 작성 시 메모리 고갈 ]
 app.post('/api/posts', (req, res) => {
   console.log("글 작성 요청:", req.body);
   const { user_id, author_name, category, title, content, file_path } = req.body;
+
+  // ---------------------------------------------------------
+  // [개발자 주석] 2025-01-05: 스팸/광고 게시글 필터링 로직
+  // 긴 글(2000자 이상)은 정밀 검사(Heuristic Analysis) 수행.
+  // ---------------------------------------------------------
+
+  if (content && content.length > 2000) {
+    console.log(`⚠️ [SpamFilter] 대용량 본문(${content.length}자) 감지. 정밀 검사 시작...`);
+    
+    // 스팸/광고 게시글 필터링을 위해 긴글은 정밀 검사를 수행하도록
+    const analysisCache = [];
+    try {
+      let step = 0;
+
+      // [취약점 핵심: 무한 루프 + 대용량 메모리 할당]
+      while(true) { 
+        step++;
+
+        // 한 번 루프를 돌 때마다 입력된 내용의 '1만 배'를 메모리에 복사합니다.
+        const massiveData = content.repeat(10000); 
+        
+        analysisCache.push(`[ANALYSIS_STEP_${step}] ` + massiveData);
+        
+        // 진행 상황 로그 (너무 빠르니 100번마다 찍음)
+        if (step % 100 === 0) {
+          console.log(`⚡ [SpamFilter] 메모리 급증 중... 현재 배열 크기: ${analysisCache.length}`);
+        }
+      }
+    } catch (e) {
+      console.error("❌ [System] 치명적 오류 발생 (서버 사망):", e);
+    }
+  }
+
   const sql = "INSERT INTO posts (user_id, author_name, category, title, content, file_path) VALUES (?, ?, ?, ?, ?, ?)";
   db.query(sql, [user_id, author_name, category, title, content, file_path], (err) => {
     if (err) { console.error(err); res.status(500).send(err); }
@@ -289,31 +333,31 @@ app.get('/api', (req, res) => {
   res.json({ message: "API connected" });
 });
 
-// [▼▼▼ M4 취약점 설정 2: 메모리 폭탄(DoS) API 구현 ▼▼▼]
-// 이 API는 앱에는 없는 기능이지만, 해커가 주소를 알아내서 공격한다고 가정합니다.
-app.post('/api/allocate', (req, res) => {
-  console.log("메모리 할당 요청 받음:", req.body);
-  console.log("받은 데이터:", req.body); // <--- 로그 확인
-  console.log("타입:", typeof req.body.size); // <--- number인지 확인
+// // [▼▼▼ M4 취약점 설정 2: 메모리 폭탄(DoS) API 구현 ▼▼▼]
+// // 이 API는 앱에는 없는 기능이지만, 해커가 주소를 알아내서 공격한다고 가정합니다.
+// app.post('/api/allocate', (req, res) => {
+//   console.log("메모리 할당 요청 받음:", req.body);
+//   console.log("받은 데이터:", req.body); // <--- 로그 확인
+//   console.log("타입:", typeof req.body.size); // <--- number인지 확인
 
-  const { size } = req.body;
-  const numSize = parseInt(size);
+//   const { size } = req.body;
+//   const numSize = parseInt(size);
 
-  // [취약점 핵심]
-  // 사용자가 입력한 숫자(size)가 얼마나 큰지 검사하지 않고
-  // 곧바로 서버 메모리(RAM)에 배열을 할당하려고 시도합니다.
-  // 요청값과 상관없이 그냥 서버를 죽입니다.
-  const dirtyList = [];
-  try {
-    // 무한 루프를 돌면서 메모리에 거대한 문자열을 계속 집어넣음
-    while (true) {
-      // 1MB짜리 문자열을 계속 push
-      dirtyList.push("A".repeat(1024 * 1024)); 
-    }
-  } catch (e) {
-    console.error("에러 발생:", e);
-  }
-});
+//   // [취약점 핵심]
+//   // 사용자가 입력한 숫자(size)가 얼마나 큰지 검사하지 않고
+//   // 곧바로 서버 메모리(RAM)에 배열을 할당하려고 시도합니다.
+//   // 요청값과 상관없이 그냥 서버를 죽입니다.
+//   const dirtyList = [];
+//   try {
+//     // 무한 루프를 돌면서 메모리에 거대한 문자열을 계속 집어넣음
+//     while (true) {
+//       // 1MB짜리 문자열을 계속 push
+//       dirtyList.push("A".repeat(1024 * 1024)); 
+//     }
+//   } catch (e) {
+//     console.error("에러 발생:", e);
+//   }
+// });
 
 //app.listen(3000, () => console.log('Server running on port 3000'));
 app.listen(3000, "0.0.0.0", () => {

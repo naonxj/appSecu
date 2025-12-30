@@ -21,8 +21,8 @@ import PatientScreen from './screens/PatientScreen';
 import DoctorScreen from './screens/DoctorScreen';
 import AdminScreen from './screens/AdminScreen';
 
-const Stack = createNativeStackNavigator();
-const API_URL = 'http://192.168.16.40/api'; 
+const Stack = createNativeStackNavigator(); 
+const API_URL = 'http://192.168.16.50/api';
 
 // 날짜 포맷 (YYYY-MM-DD)
 const formatDate = (y: number, m: number, d: number) => {
@@ -92,6 +92,7 @@ function AuthScreen({ navigation }: any) {
           console.log("==========================================");
 
           Alert.alert('환영합니다', `${data.username}님 로그인되었습니다.`);
+          console.log("로그인 성공, 서버가 준 ID: ", data.id);
           const userInfo = {userId: data.id, username: data.username, name:data.name};
           if (data.role === 'patient') navigation.replace('PatientMain',userInfo);
           else if (data.role === 'doctor') navigation.replace('DoctorMain',userInfo);
@@ -105,7 +106,7 @@ function AuthScreen({ navigation }: any) {
       }
     } catch (error) {
       console.error(error);
-      Alert.alert('연결 실패', '백엔드 서버가 켜져있는지 확인해주세요.\n(node index.js)');
+      Alert.alert('연결 실패', '다시 로그인을 시도해보세요.\n');
     }
   };
 

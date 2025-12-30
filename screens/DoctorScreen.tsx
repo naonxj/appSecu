@@ -4,7 +4,7 @@ import {
 } from 'react-native';
 
 //const API_URL = 'http://10.0.2.2:3000/api';
-const API_URL = 'http://192.168.16.40:3000/api';
+const API_URL = 'http://192.168.16.50/api';
 
 // 날짜 포맷 헬퍼
 const formatDate = (date: Date) => {
